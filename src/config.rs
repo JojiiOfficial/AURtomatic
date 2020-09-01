@@ -8,8 +8,10 @@ use std::fs::{create_dir_all, OpenOptions};
 use std::io::{self, Read, Write};
 use std::path::Path;
 
+/// The defalut config path.
 const CONFIG_PATH: &str = "./data/config.yaml";
 
+/// Whole config struct
 #[derive(Default, Debug, Serialize, Deserialize)]
 pub struct Config {
     pub repo_dir: String,
@@ -18,12 +20,14 @@ pub struct Config {
     pub git: Git,
 }
 
+/// Git upstream for custom repository.
 #[derive(Default, Debug, Serialize, Deserialize)]
 pub struct Git {
     pub url: String,
     pub user: String,
 }
 
+/// RemoteBuild configuration.
 #[derive(Default, Debug, Serialize, Deserialize)]
 pub struct Rbuild {
     pub user_name: String,
@@ -32,6 +36,7 @@ pub struct Rbuild {
 }
 
 impl Config {
+    /// Create and return a new config.
     pub fn new() -> Result<(Self, bool), Box<dyn error::Error>> {
         let path = Path::new(&CONFIG_PATH);
 
@@ -58,6 +63,7 @@ impl Config {
         Ok((from_str(&config_str)?, just_created))
     }
 
+    /// Check if config is set up completely.
     pub fn need_adjustment(&self) -> bool {
         self.repo_dir.is_empty()
             || self.tmp_dir.is_empty()
@@ -68,6 +74,7 @@ impl Config {
             || self.git.user.is_empty()
     }
 
+    /// Create all files needed for a working environment.
     pub fn create_environment(&self) -> Result<(), io::Error> {
         let tmp_path = Path::new(&self.tmp_dir);
         if !tmp_path.exists() {
@@ -77,6 +84,7 @@ impl Config {
         Ok(())
     }
 
+    /// Return a librb from a config
     pub fn as_rbuild(&self) -> librb::LibRb {
         librb::new(RequestConfig {
             machine_id: "".to_string(),

@@ -1,6 +1,8 @@
 #![allow(unreachable_code, unused_variables)]
 
 mod config;
+mod dir_diff;
+mod pkgcheck;
 
 use std::cmp::Ordering;
 use std::error::Error;
@@ -9,6 +11,7 @@ use std::path::Path;
 use std::process::exit;
 
 use crate::config::Config;
+use crate::pkgcheck::Check;
 
 use alpm::Version as alpmVersion;
 use aur_client_fork::aur;
@@ -41,7 +44,6 @@ async fn main() {
         exit(1);
     }
 
-    // let tmp_path = Path::new(&config.tmp_dir);
     let path = Path::new(&config.repo_dir);
     let rbuild = config.as_rbuild();
 
@@ -51,6 +53,7 @@ async fn main() {
         if !file_name.ends_with(".zst") && !file_name.ends_with(".xz") {
             continue;
         }
+        println!("found package: {}", file_name);
 
         let info = pkginfo::new(path.join(&file_name).to_str().unwrap());
         if info.is_err() {
@@ -63,6 +66,7 @@ async fn main() {
     }
 }
 
+/// Checks if a package has updates.
 async fn handle_package(
     config: &config::Config,
     local_pkg_info: pkginfo::PkgInfo,
@@ -72,22 +76,23 @@ async fn handle_package(
     // Find package in AUR
     let remote_pkg_results = { aur::info(&[&local_pkg_info.pkg_name]).await?.results };
     if remote_pkg_results.is_empty() {
+        // Package was not found in AUR
         return Ok(());
     }
 
     let aur_pkg = remote_pkg_results.into_iter().nth(0).unwrap();
 
     let local_ver = alpmVersion::new(&local_pkg_info.pkg_ver);
-    let rem_ver = alpmVersion::new(&aur_pkg.Version);
+    let aur_ver = alpmVersion::new(&aur_pkg.Version);
 
     // Ignore non updates
-    if alpmVersion::cmp(&local_ver, &rem_ver) != Ordering::Less {
+    if alpmVersion::cmp(&local_ver, &aur_ver) != Ordering::Less {
         return Ok(());
     }
 
     println!(
         "Updating {} {} -> {}",
-        local_pkg_info.pkg_name, local_pkg_info.pkg_ver, rem_ver,
+        local_pkg_info.pkg_name, local_pkg_info.pkg_ver, aur_ver,
     );
 
     update_package(config, aur_pkg, local_pkg_info).await?;
@@ -99,18 +104,25 @@ async fn update_package(
     aur_package: aur::Package,
     local_pkg_info: pkginfo::PkgInfo,
 ) -> Result<(), Box<dyn Error>> {
+    // working dir
     let tmp_path = Path::new(&config.tmp_dir).join(&local_pkg_info.pkg_name);
-    let tmp_aur = tmp_path.join("aur");
-    let tmp_custom = tmp_path.join("gitea");
 
-    if tmp_path.exists() {
+    let tmp_aur = tmp_path.join("aur"); // Tmp AUR git dir
+    let tmp_custom = tmp_path.join("git"); // Tmp custom git dir
+
+    // An existing tmp dir indicates a
+    // running package upgrade process
+    if tmp_path.exists() && false {
         println!("Already building for: {}", local_pkg_info.pkg_name);
         return Ok(());
     }
+
+    // Create required files
     fs::create_dir(&tmp_path)?;
     fs::create_dir(&tmp_aur)?;
     fs::create_dir(&tmp_custom)?;
 
+    // Clone custom repo's git version
     let custom_git_url = Url::parse(
         Path::new(&config.git.url)
             .join(&config.git.user)
@@ -120,9 +132,33 @@ async fn update_package(
     )?;
     let custom_repo = Repository::clone(custom_git_url.as_str(), &tmp_custom)?;
 
+    // Clone aur package
     let aur_git_url =
         Url::parse(format!("https://aur.archlinux.org/{}.git", local_pkg_info.pkg_name).as_str())?;
     let aur_repo = Repository::clone(aur_git_url.as_str(), &tmp_aur)?;
+
+    // Create pkg check for local tmp files
+    let pkg_check = Check::new(&tmp_custom, &tmp_aur);
+
+    // Check dir-difference
+    if pkg_check.are_dirs_different() {
+        println!("Dirs are different!");
+        return Ok(());
+    }
+
+    // check file contents
+    if !pkg_check.check_files()? {
+        println!("Checks didn't pass for '{}'", local_pkg_info.pkg_name);
+        return Ok(());
+    }
+
+    // Create remote build job.
+    let rbuild = config.as_rbuild();
+    let aurbuild = rbuild.new_aurbuild(&local_pkg_info.pkg_name);
+    if let Err(e) = aurbuild.create_job().await {
+        eprintln!("Error creating rbuild job: {:?}", e);
+        return Ok(());
+    }
 
     Ok(())
 }

@@ -1,2 +1,2 @@
 # AURtomatic
-Automatically build new versions of AUR packages 
+Automatically build new versions of AUR packages written in Rust.

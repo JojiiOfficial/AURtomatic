@@ -128,7 +128,7 @@ async fn update_package(
 
     // An existing tmp dir indicates a
     // running package upgrade process
-    if tmp_path.exists() && false {
+    if tmp_path.exists() {
         println!("Already building for: {}", local_pkg_info.pkg_name);
         return Ok(());
     }

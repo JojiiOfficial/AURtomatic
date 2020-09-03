@@ -83,7 +83,7 @@ impl<'a> Check<'a> {
     }
 
     /// Returns false if the AUR file contains illegal changes
-    fn check_diff_result<'c>(result: &Vec<diff::Result<&'c str>>) -> bool {
+    fn check_diff_result(result: &Vec<diff::Result<&str>>) -> bool {
         // Go through every created diff
         for diff in result {
             if let diff::Result::Right(r) = diff {

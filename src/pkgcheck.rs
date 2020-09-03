@@ -25,6 +25,7 @@ const ALLOWED_CHANGES: &'static [&'static str] = &[
     "pkgdesc",
     "arch",
     "sha256sums",
+    "sha512sums",
     "md5sums",
     "optdepends",
     "validpgpkeys",

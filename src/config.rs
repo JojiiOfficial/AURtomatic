@@ -16,7 +16,8 @@ const CONFIG_PATH: &str = "./data/config.yaml";
 pub struct Config {
     pub repo_dir: String,
     pub tmp_dir: String,
-    pub rbuild: Rbuild,
+    pub rbuild: TokenConfig,
+    pub dmanager: TokenConfig,
     pub git: Git,
 }
 
@@ -29,10 +30,16 @@ pub struct Git {
 
 /// RemoteBuild configuration.
 #[derive(Default, Debug, Serialize, Deserialize)]
-pub struct Rbuild {
+pub struct TokenConfig {
     pub user_name: String,
     pub token: String,
     pub url: String,
+}
+
+impl TokenConfig {
+    fn is_empty(&self) -> bool {
+        self.user_name.is_empty() || self.token.is_empty() || self.url.is_empty()
+    }
 }
 
 impl Config {
@@ -67,9 +74,8 @@ impl Config {
     pub fn need_adjustment(&self) -> bool {
         self.repo_dir.is_empty()
             || self.tmp_dir.is_empty()
-            || self.rbuild.user_name.is_empty()
-            || self.rbuild.token.is_empty()
-            || self.rbuild.url.is_empty()
+            || self.rbuild.is_empty()
+            || self.dmanager.is_empty()
             || self.git.url.is_empty()
             || self.git.user.is_empty()
     }

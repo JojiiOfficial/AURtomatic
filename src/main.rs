@@ -154,7 +154,14 @@ async fn update_package(
 
     // Create remote build job.
     let rbuild = config.as_rbuild();
-    let aurbuild = rbuild.new_aurbuild(&local_pkg_info.pkg_name);
+
+    let aurbuild = rbuild.new_aurbuild(&local_pkg_info.pkg_name).with_dmanager(
+        config.dmanager.user_name.clone(),
+        config.dmanager.token.clone(),
+        config.dmanager.url.clone(),
+        "".to_owned(),
+    );
+
     if let Err(e) = aurbuild.create_job().await {
         eprintln!("Error creating rbuild job: {:?}", e);
         return Ok(());

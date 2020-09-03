@@ -116,7 +116,7 @@ fn read_file(p: &Path) -> Result<String, io::Error> {
             continue;
         }
 
-        s.push_str(i);
+        s.push_str(i.replace(";", ";\n").as_str());
         s.push('\n');
     }
 

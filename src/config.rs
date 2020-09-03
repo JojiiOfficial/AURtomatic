@@ -7,6 +7,7 @@ use std::fs;
 use std::fs::{create_dir_all, OpenOptions};
 use std::io::{self, Read, Write};
 use std::path::Path;
+use std::time::Duration;
 
 /// The defalut config path.
 const CONFIG_PATH: &str = "./data/config.yaml";
@@ -19,6 +20,8 @@ pub struct Config {
     pub rbuild: TokenConfig,
     pub dmanager: TokenConfig,
     pub git: Git,
+    pub ignore_packages: Option<Vec<String>>,
+    pub refresh_delay: Duration,
 }
 
 /// Git upstream for custom repository.

@@ -9,6 +9,7 @@ use std::error::Error;
 use std::fs;
 use std::path::Path;
 use std::process::exit;
+use std::thread;
 
 use crate::config::Config;
 use crate::pkgcheck::Check;
@@ -47,6 +48,15 @@ async fn main() {
     let path = Path::new(&config.repo_dir);
     let rbuild = config.as_rbuild();
 
+    let to_ignore: Vec<String> = config.ignore_packages.clone().unwrap_or_default();
+
+    loop {
+        refresh_packages(&config, path, &to_ignore).await;
+        thread::sleep(config.refresh_delay);
+    }
+}
+
+async fn refresh_packages(config: &config::Config, path: &Path, to_ignore: &Vec<String>) {
     // Read every file in path
     for i in path.read_dir().unwrap() {
         let file_name = i.unwrap().file_name().to_str().unwrap().to_owned();
@@ -59,8 +69,14 @@ async fn main() {
         if info.is_err() {
             continue;
         }
+        let info = info.unwrap();
 
-        if let Err(e) = handle_package(&config, info.unwrap(), file_name, path).await {
+        if to_ignore.contains(&info.pkg_name) {
+            println!("skipping {}", info.pkg_name);
+            continue;
+        }
+
+        if let Err(e) = handle_package(&config, info, file_name, path).await {
             eprintln!("{}", e);
         }
     }

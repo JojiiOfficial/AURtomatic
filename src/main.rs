@@ -16,6 +16,7 @@ use crate::pkgcheck::Check;
 
 use alpm::Version as alpmVersion;
 use aur_client_fork::aur;
+use futures::{stream, StreamExt};
 use git2::Repository;
 use reqwest::Url;
 
@@ -48,49 +49,53 @@ async fn main() {
     let path = Path::new(&config.repo_dir);
     let rbuild = config.as_rbuild();
 
-    let to_ignore: Vec<String> = config.ignore_packages.clone().unwrap_or_default();
-
     loop {
-        refresh_packages(&config, path, &to_ignore).await;
+        refresh_packages(&config, path).await;
         thread::sleep(config.refresh_delay);
     }
 }
 
-async fn refresh_packages(config: &config::Config, path: &Path, to_ignore: &Vec<String>) {
-    // Read every file in path
-    for i in path.read_dir().unwrap() {
-        let file_name = i.unwrap().file_name().to_str().unwrap().to_owned();
-        if !file_name.ends_with(".zst") && !file_name.ends_with(".xz") {
-            continue;
-        }
-        println!("found package: {}", file_name);
-
-        let info = pkginfo::new(path.join(&file_name).to_str().unwrap());
-        if info.is_err() {
-            continue;
-        }
-        let info = info.unwrap();
-
-        if to_ignore.contains(&info.pkg_name) {
-            println!("skipping {}", info.pkg_name);
-            continue;
-        }
-
-        if let Err(e) = handle_package(&config, info, file_name, path).await {
-            eprintln!("{}", e);
-        }
-    }
+async fn refresh_packages(config: &config::Config, path: &Path) {
+    stream::iter(path.read_dir().unwrap())
+        .map(|i| async move { handle_package(&config, i.unwrap(), path).await })
+        .buffer_unordered(10)
+        .for_each(|b| async {
+            if let Err(e) = b {
+                println!("{:?}", e);
+            }
+        })
+        .await;
 }
 
 /// Checks if a package has updates.
 async fn handle_package(
     config: &config::Config,
-    local_pkg_info: pkginfo::PkgInfo,
-    file_name: String,
+    i: fs::DirEntry,
     path: &Path,
 ) -> Result<(), Box<dyn Error>> {
+    let file_name = i.file_name().to_str().unwrap().to_owned();
+    if !file_name.ends_with(".zst") && !file_name.ends_with(".xz") {
+        return Ok(());
+    }
+
+    println!("found package: {}", file_name);
+
+    let info = pkginfo::new(path.join(&file_name).to_str().unwrap());
+    if info.is_err() {
+        return Ok(());
+    }
+
+    let local_pkg_info = info.unwrap();
+
+    // Filter packages to ignore
+    if let Some(ref to_ignore) = config.ignore_packages {
+        if to_ignore.contains(&local_pkg_info.pkg_name) {
+            return Ok(());
+        }
+    }
+
     // Find package in AUR
-    let remote_pkg_results = { aur::info(&[&local_pkg_info.pkg_name]).await?.results };
+    let remote_pkg_results = aur::info(&[&local_pkg_info.pkg_name]).await?.results;
     if remote_pkg_results.is_empty() {
         // Package was not found in AUR
         return Ok(());

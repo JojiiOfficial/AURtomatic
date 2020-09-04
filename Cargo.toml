@@ -10,7 +10,7 @@ edition = "2018"
 alpm = "0.10.1"
 aur-client-fork = "0.1.5"
 pkginfo = "0.1.2"
-tokio = { version = "0.2.22", features = ["rt-core", "rt-threaded", "macros"] }
+tokio = { version = "0.2.22", features = ["rt-core", "rt-threaded", "macros", "process"] }
 serde = "1.0.115"
 serde_yaml = "0.8.13"
 lib_remotebuild-rs = "0.1.3"

@@ -3,6 +3,7 @@ use std::error::Error;
 use std::fs;
 use std::io;
 use std::path::Path;
+use tokio::process::Command;
 
 use crate::dir_diff;
 
@@ -55,6 +56,8 @@ impl<'a> Check<'a> {
     /// Check all files by comparing the differences of the git version and the
     /// new AUR package version.
     pub fn check_files(&self) -> Result<bool, Box<dyn Error>> {
+        let mut had_diff = false;
+
         // Zip up all git files and the corresponding updated files
         for (a, b) in dir_diff::walk_dir(self.folder_left)?
             .filter_entry(dir_diff::git_filter_entries)
@@ -71,21 +74,29 @@ impl<'a> Check<'a> {
             let b_content = read_file(b.path())?;
 
             //  Build diff from both file contents
-            let diff_result = diff::lines(a_content.as_str(), b_content.as_str());
+            let diff = diff::lines(a_content.as_str(), b_content.as_str());
+            if !is_diff_empty(&diff) {
+                had_diff = true;
+            }
 
             // Check and validate the upgraded package
-            if !Self::check_diff_result(&diff_result) {
+            if !Self::check_diff(diff) {
                 return Ok(false);
             }
+        }
+
+        if !had_diff {
+            println!("No change detected!");
+            return Ok(false);
         }
 
         Ok(true)
     }
 
     /// Returns false if the AUR file contains illegal changes
-    fn check_diff_result(result: &Vec<diff::Result<&str>>) -> bool {
+    fn check_diff(res: Vec<diff::Result<&str>>) -> bool {
         // Go through every created diff
-        for diff in result {
+        for diff in res {
             if let diff::Result::Right(r) = diff {
                 // All non-variable changes are forbidden
                 if !r.contains("=") {
@@ -103,6 +114,35 @@ impl<'a> Check<'a> {
         }
 
         true
+    }
+
+    /// Apply changes from aur to own repo
+    pub fn apply_changes(&self) -> Result<(), io::Error> {
+        for (a, b) in dir_diff::walk_dir(self.folder_left)?
+            .filter_entry(dir_diff::git_filter_entries)
+            .zip(dir_diff::walk_dir(self.folder_right)?.filter_entry(dir_diff::git_filter_entries))
+        {
+            let a = a?; // local file
+            let b = b?; // remote file
+
+            // Copy filecontents to own git
+            fs::copy(b.path(), a.path())?;
+        }
+
+        Ok(())
+    }
+
+    pub async fn update_custom_srcinfo(&self) -> Result<(), Box<dyn Error>> {
+        let status = Command::new("sh")
+            .arg("-c")
+            .arg(format!(
+                "pushd \"{}\" > /dev/null; makepkg --printsrcinfo > .SRCINFO",
+                self.folder_left.to_str().unwrap()
+            ))
+            .status()
+            .await?;
+
+        Ok(())
     }
 }
 
@@ -132,4 +172,14 @@ fn debug_diff_result<'a>(res: &Vec<diff::Result<&'a str>>) {
             diff::Result::Right(r) => println!("+{}", r),
         }
     }
+}
+
+fn is_diff_empty(d: &Vec<diff::Result<&str>>) -> bool {
+    for i in d {
+        if let diff::Result::Right(_) = i {
+            return false;
+        }
+    }
+
+    true
 }

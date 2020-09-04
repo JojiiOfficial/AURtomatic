@@ -146,17 +146,37 @@ async fn update_package(
     // Clone custom repo's git version
     let custom_git_url = Url::parse(
         Path::new(&config.git.url)
-            .join(&config.git.user)
             .join(&local_pkg_info.pkg_name)
             .to_str()
             .unwrap(),
     )?;
-    let custom_repo = Repository::clone(custom_git_url.as_str(), &tmp_custom)?;
 
     // Clone aur package
     let aur_git_url =
         Url::parse(format!("https://aur.archlinux.org/{}.git", local_pkg_info.pkg_name).as_str())?;
     let aur_repo = Repository::clone(aur_git_url.as_str(), &tmp_aur)?;
+
+    let credential_callback =
+        |a: &str, b: Option<&str>, c: git2::CredentialType| -> Result<git2::Cred, git2::Error> {
+            let key = fs::read_to_string(Path::new(config::CONFIG_PATH).join(&config.git.priv_key))
+                .expect("Can't read priv_key");
+
+            Ok(git2::Cred::ssh_key_from_memory(
+                b.unwrap(),
+                None,
+                &key,
+                None,
+            )?)
+        };
+
+    let mut cb = git2::RemoteCallbacks::new();
+    cb.credentials(credential_callback);
+
+    let mut fo = git2::FetchOptions::new();
+    fo.remote_callbacks(cb);
+    let custom_repo = git2::build::RepoBuilder::new()
+        .fetch_options(fo)
+        .clone(custom_git_url.as_str(), &tmp_custom)?;
 
     // Create pkg check for local tmp files
     let pkg_check = Check::new(&tmp_custom, &tmp_aur);
@@ -173,6 +193,9 @@ async fn update_package(
         return Ok(());
     }
 
+    pkg_check.apply_changes()?;
+    pkg_check.update_custom_srcinfo().await?;
+
     // Create remote build job.
     let rbuild = config.as_rbuild();
 
@@ -187,6 +210,48 @@ async fn update_package(
         eprintln!("Error creating rbuild job: {:?}", e);
         return Ok(());
     }
+
+    let mut custom_repo_index = custom_repo.index()?;
+
+    // Add all to git index
+    custom_repo_index.add_all(["."].iter(), git2::IndexAddOption::DEFAULT, None)?;
+    custom_repo_index.write()?;
+
+    // Create commit
+    let sig = git2::Signature::now(&config.git.bot_name, &config.git.bot_email)?;
+    let commit = custom_repo.find_commit(custom_repo.head()?.target().unwrap())?;
+    let tree = custom_repo.find_tree(custom_repo_index.write_tree()?)?;
+
+    let nice_aur_version = {
+        if !aur_package.Version.starts_with("v") {
+            format!("v{}", aur_package.Version)
+        } else {
+            aur_package.Version.clone()
+        }
+    };
+
+    custom_repo.commit(
+        Some("HEAD"),
+        &sig,
+        &sig,
+        format!("Update to AUR {}", nice_aur_version).as_str(),
+        &tree,
+        &[&commit],
+    )?;
+
+    // Push changes
+    let mut cb = git2::RemoteCallbacks::new();
+    cb.credentials(credential_callback);
+
+    let mut push_option = git2::PushOptions::new();
+    push_option.remote_callbacks(cb);
+
+    custom_repo.find_remote("origin")?.push(
+        &["refs/heads/master:refs/heads/master"],
+        Some(&mut push_option),
+    )?;
+
+    println!("push done");
 
     Ok(())
 }

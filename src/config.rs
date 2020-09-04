@@ -10,7 +10,8 @@ use std::path::Path;
 use std::time::Duration;
 
 /// The defalut config path.
-const CONFIG_PATH: &str = "./data/config.yaml";
+pub const CONFIG_PATH: &str = "./data/";
+pub const CONFIG_FILE: &str = "config.yaml";
 
 /// Whole config struct
 #[derive(Default, Debug, Serialize, Deserialize)]
@@ -27,8 +28,11 @@ pub struct Config {
 /// Git upstream for custom repository.
 #[derive(Default, Debug, Serialize, Deserialize)]
 pub struct Git {
+    pub bot_name: String,
+    pub bot_email: String,
+
     pub url: String,
-    pub user: String,
+    pub priv_key: String,
 }
 
 /// RemoteBuild configuration.
@@ -45,10 +49,20 @@ impl TokenConfig {
     }
 }
 
+impl Git {
+    fn is_empty(&self) -> bool {
+        self.url.is_empty()
+            || self.bot_email.is_empty()
+            || self.bot_name.is_empty()
+            || self.priv_key.is_empty()
+    }
+}
+
 impl Config {
     /// Create and return a new config.
     pub fn new() -> Result<(Self, bool), Box<dyn error::Error>> {
-        let path = Path::new(&CONFIG_PATH);
+        let path = Path::new(&CONFIG_PATH).join(&CONFIG_FILE);
+        println!("{}", path.display());
 
         if path.parent().is_some() && !path.parent().unwrap().exists() {
             create_dir_all(path.parent().unwrap())?;
@@ -79,8 +93,7 @@ impl Config {
             || self.tmp_dir.is_empty()
             || self.rbuild.is_empty()
             || self.dmanager.is_empty()
-            || self.git.url.is_empty()
-            || self.git.user.is_empty()
+            || self.git.is_empty()
     }
 
     /// Create all files needed for a working environment.

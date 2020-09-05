@@ -1,4 +1,5 @@
 #![allow(dead_code)]
+
 use std::error::Error;
 use std::fs;
 use std::io;
@@ -6,6 +7,7 @@ use std::path::Path;
 use tokio::process::Command;
 
 use crate::dir_diff;
+use regex::Regex;
 
 /// Check represents the validation of a new AUR package
 /// version. It is supposed to reduce the risk of automatically
@@ -156,7 +158,8 @@ fn read_file(p: &Path) -> Result<String, io::Error> {
             continue;
         }
 
-        s.push_str(i.replace(";", ";\n").as_str());
+        let m = unwrap_multi_line(i.replace(";", ";\n").as_ref(), "'\n");
+        s.push_str(m.as_str());
         s.push('\n');
     }
 
@@ -182,4 +185,11 @@ fn is_diff_empty(d: &Vec<diff::Result<&str>>) -> bool {
     }
 
     true
+}
+
+fn unwrap_multi_line(a: &str, sub: &str) -> String {
+    Regex::new("[ ]+")
+        .unwrap()
+        .replace_all(String::from(a).trim().replace(sub, "' ").as_str(), " ")
+        .to_string()
 }

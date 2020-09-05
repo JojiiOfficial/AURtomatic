@@ -2,17 +2,19 @@
 
 mod config;
 mod dir_diff;
+mod error;
 mod pkgcheck;
 mod tg_bot_wrapper;
 
 use std::cmp::Ordering;
-use std::error::Error;
+use std::error::Error as stdErr;
 use std::fs;
 use std::path::Path;
 use std::process::exit;
 use std::thread;
 
 use crate::config::Config;
+use crate::error::Error;
 use crate::pkgcheck::Check;
 
 use alpm::Version as alpmVersion;
@@ -52,6 +54,10 @@ impl BuildService {
             .buffer_unordered(10)
             .for_each(|b| async {
                 if let Err(e) = b {
+                    self.tgbot
+                        .send_message(self.config.telegram.user_id, format!("{:?}", e))
+                        .await
+                        .unwrap();
                     println!("{:?}", e);
                 }
             })
@@ -64,7 +70,7 @@ impl BuildService {
         config: &config::Config,
         i: fs::DirEntry,
         path: &Path,
-    ) -> Result<(), Box<dyn Error>> {
+    ) -> Result<(), Box<dyn stdErr>> {
         let file_name = i.file_name().to_str().unwrap().to_owned();
         if !file_name.ends_with(".zst") && !file_name.ends_with(".xz") {
             return Ok(());
@@ -117,7 +123,7 @@ impl BuildService {
         config: &config::Config,
         aur_package: aur::Package,
         local_pkg_info: pkginfo::PkgInfo,
-    ) -> Result<(), Box<dyn Error>> {
+    ) -> Result<(), Box<dyn stdErr>> {
         // working dir
         let tmp_path = Path::new(&config.tmp_dir).join(&local_pkg_info.pkg_name);
 
@@ -179,14 +185,12 @@ impl BuildService {
 
         // Check dir-difference
         if pkg_check.are_dirs_different() {
-            println!("Dirs are different!");
-            return Ok(());
+            return Err(Box::new(Error::DifferentDirs(local_pkg_info.pkg_name)));
         }
 
         // check file contents
         if !pkg_check.check_files()? {
-            println!("Checks didn't pass for '{}'", local_pkg_info.pkg_name);
-            return Ok(());
+            return Err(Box::new(Error::ChecksFailed(local_pkg_info.pkg_name)));
         }
 
         pkg_check.apply_changes()?;
@@ -203,8 +207,7 @@ impl BuildService {
         );
 
         if let Err(e) = aurbuild.create_job().await {
-            eprintln!("Error creating rbuild job: {:?}", e);
-            return Ok(());
+            return Err(Box::new(Error::AurJobError(local_pkg_info.pkg_name)));
         }
 
         let mut custom_repo_index = custom_repo.index()?;

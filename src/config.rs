@@ -23,6 +23,13 @@ pub struct Config {
     pub git: Git,
     pub ignore_packages: Option<Vec<String>>,
     pub refresh_delay: Duration,
+    pub telegram: Telegram,
+}
+
+#[derive(Default, Debug, Serialize, Deserialize)]
+pub struct Telegram {
+    pub bot_token: String,
+    pub user_id: u64,
 }
 
 /// Git upstream for custom repository.
@@ -62,7 +69,6 @@ impl Config {
     /// Create and return a new config.
     pub fn new() -> Result<(Self, bool), Box<dyn error::Error>> {
         let path = Path::new(&CONFIG_PATH).join(&CONFIG_FILE);
-        println!("{}", path.display());
 
         if path.parent().is_some() && !path.parent().unwrap().exists() {
             create_dir_all(path.parent().unwrap())?;
@@ -94,6 +100,8 @@ impl Config {
             || self.rbuild.is_empty()
             || self.dmanager.is_empty()
             || self.git.is_empty()
+            || self.telegram.bot_token.is_empty()
+            || self.telegram.user_id == 0
     }
 
     /// Create all files needed for a working environment.

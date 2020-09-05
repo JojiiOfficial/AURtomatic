@@ -9,6 +9,10 @@ use tokio::process::Command;
 use crate::dir_diff;
 use regex::Regex;
 
+#[cfg(test)]
+#[path = "pkgcheck_test.rs"]
+mod pkgcheck_test;
+
 /// Check represents the validation of a new AUR package
 /// version. It is supposed to reduce the risk of automatically
 /// executing the PKGBUILD scripts. This is getting achieved
@@ -33,9 +37,6 @@ const ALLOWED_CHANGES: &'static [&'static str] = &[
     "optdepends",
     "validpgpkeys",
     "conflicts",
-    "_pkgver",
-    "_pkgrel",
-    "_pkgdesc",
 ];
 
 impl<'a> Check<'a> {
@@ -70,10 +71,10 @@ impl<'a> Check<'a> {
 
             if a.file_type().is_dir() || b.file_type().is_dir() {
                 continue;
-            }
+            };
 
-            let a_content = read_file(a.path())?;
-            let b_content = read_file(b.path())?;
+            let a_content = parse_src_file(fs::read_to_string(a.path())?);
+            let b_content = parse_src_file(fs::read_to_string(b.path())?);
 
             //  Build diff from both file contents
             let diff = diff::lines(a_content.as_str(), b_content.as_str());
@@ -107,8 +108,8 @@ impl<'a> Check<'a> {
                 }
 
                 let s = r.split("=").nth(0).unwrap();
-                // Check if the variable update is allowed
-                if !ALLOWED_CHANGES.contains(&s) {
+                // Check if the variable update is allowed. Custom variables are allowed
+                if !ALLOWED_CHANGES.contains(&s) && !s.starts_with("_") {
                     eprintln!("Found '{}' -> Illegal change", s);
                     return false;
                 }
@@ -149,10 +150,10 @@ impl<'a> Check<'a> {
 }
 
 /// Read file and remove empty lines
-fn read_file(p: &Path) -> Result<String, io::Error> {
+fn parse_src_file(src: String) -> String {
     let mut s = String::new();
 
-    for i in fs::read_to_string(p)?.lines() {
+    for i in src.lines() {
         // Ignore empty lines and comments
         if i.trim().is_empty() || i.trim().starts_with("#") {
             continue;
@@ -163,7 +164,7 @@ fn read_file(p: &Path) -> Result<String, io::Error> {
         s.push('\n');
     }
 
-    Ok(s)
+    s
 }
 
 /// Handy function to debug the changes.

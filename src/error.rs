@@ -6,6 +6,8 @@ pub enum Error {
     DifferentDirs(String),
     ChecksFailed(String),
     AurJobError(String),
+    JobInfoError(String),
+    JobFailed(String),
 }
 
 impl Display for Error {

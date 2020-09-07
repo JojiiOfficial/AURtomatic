@@ -153,13 +153,15 @@ impl<'a> Check<'a> {
 fn parse_src_file(src: String) -> String {
     let mut s = String::new();
 
+    let src = unwrap_multi_line(&src, "'\n");
+
     for i in src.lines() {
         // Ignore empty lines and comments
         if i.trim().is_empty() || i.trim().starts_with("#") {
             continue;
         }
 
-        let m = unwrap_multi_line(i.replace(";", ";\n").as_ref(), "'\n");
+        let m = i.trim().replace(";", ";\n");
         s.push_str(m.as_str());
         s.push('\n');
     }

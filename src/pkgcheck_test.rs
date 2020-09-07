@@ -48,6 +48,8 @@ fn check_checking_diff_1() {
     let a_content = parse_src_file(old.to_owned());
     let b_content = parse_src_file(new.to_owned());
 
+    println!("{}", a_content);
+
     let diff = diff::lines(a_content.as_str(), b_content.as_str());
 
     assert!(!is_diff_empty(&diff));

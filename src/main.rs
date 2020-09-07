@@ -12,15 +12,19 @@ use std::fs;
 use std::path::Path;
 use std::process::exit;
 use std::thread;
+use std::time::Duration;
 
 use crate::config::Config;
 use crate::error::Error;
 use crate::pkgcheck::Check;
 
 use alpm::Version as alpmVersion;
+use async_std::task;
 use aur_client_fork::aur;
 use futures::{stream, StreamExt};
 use git2::Repository;
+use lib_remotebuild_rs::jobs::Status as jobStatus;
+use lib_remotebuild_rs::librb::LibRb;
 use reqwest::Url;
 use tg_bot_wrapper::TgBot;
 
@@ -191,13 +195,29 @@ impl BuildService {
             "".to_owned(),
         );
 
-        if let Err(e) = aurbuild.create_job().await {
+        // Create BuildJob
+        let build_job = aurbuild.create_job().await;
+        if let Err(e) = build_job {
             return Err(Box::new(Error::AurJobError(local_pkg_info.pkg_name)));
         }
 
+        let build_job = build_job.unwrap();
+        let job_id = build_job.response.unwrap().id;
+        println!("Created Job with ID: {}", job_id);
+
+        // Wait here until job is done
+        if let Err(e) = self.wait_for_build_job(&rbuild, &job_id).await {
+            return Err(Box::new(e));
+        }
+
+        // Push aur changes to custom git server
         self.apply_custom_repo_changes(&custom_repo, &aur_package)?;
 
-        println!("push done");
+        // Download built package
+
+        // Sign package
+
+        // Publish package
 
         Ok(())
     }
@@ -266,7 +286,34 @@ impl BuildService {
             &["refs/heads/master:refs/heads/master"],
             Some(&mut push_option),
         )?;
+        println!("push done");
+
         Ok(())
+    }
+
+    async fn wait_for_build_job<'a>(&self, rbuild: &LibRb, jid: &u32) -> Result<(), Error> {
+        let info = loop {
+            let info = rbuild.job_info(*jid).await;
+
+            if let Err(e) = info {
+                return Err(Error::JobInfoError(format!("{:?}", e)));
+            }
+
+            let info = info.unwrap().response.unwrap();
+            if info.status.is_stopped_state() {
+                break info;
+            }
+
+            task::sleep(Duration::from_secs(60)).await;
+        };
+
+        match info.status {
+            jobStatus::Failed => Err(Error::JobFailed(format!("{}", jid))),
+            jobStatus::Cancelled => {
+                Err(Error::JobFailed(format!("ID: {}. Job was cancelled", jid)))
+            }
+            _ => Ok(()),
+        }
     }
 }
 

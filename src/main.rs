@@ -213,6 +213,17 @@ impl BuildService {
         // Push aur changes to custom git server
         self.apply_custom_repo_changes(&custom_repo, &aur_package)?;
 
+        // Notify user
+        self.tgbot
+            .send_message(
+                config.telegram.user_id,
+                format!(
+                    "Bulit package {} version {}",
+                    aur_package.Name, aur_package.Version
+                ),
+            )
+            .await?;
+
         // Download built package
 
         // Sign package

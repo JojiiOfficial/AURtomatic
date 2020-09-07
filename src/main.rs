@@ -156,23 +156,8 @@ impl BuildService {
         )?;
         let aur_repo = Repository::clone(aur_git_url.as_str(), &tmp_aur)?;
 
-        let credential_callback = |a: &str,
-                                   b: Option<&str>,
-                                   c: git2::CredentialType|
-         -> Result<git2::Cred, git2::Error> {
-            let key = fs::read_to_string(Path::new(config::CONFIG_PATH).join(&config.git.priv_key))
-                .expect("Can't read priv_key");
-
-            Ok(git2::Cred::ssh_key_from_memory(
-                b.unwrap(),
-                None,
-                &key,
-                None,
-            )?)
-        };
-
         let mut cb = git2::RemoteCallbacks::new();
-        cb.credentials(credential_callback);
+        cb.credentials(|a, b, c| self.get_ssh_auth(a, b, c));
 
         let mut fo = git2::FetchOptions::new();
         fo.remote_callbacks(cb);
@@ -210,6 +195,38 @@ impl BuildService {
             return Err(Box::new(Error::AurJobError(local_pkg_info.pkg_name)));
         }
 
+        self.apply_custom_repo_changes(&custom_repo, &aur_package)?;
+
+        println!("push done");
+
+        Ok(())
+    }
+
+    fn get_ssh_auth(
+        &self,
+        a: &str,
+        b: Option<&str>,
+        c: git2::CredentialType,
+    ) -> Result<git2::Cred, git2::Error> {
+        let key =
+            fs::read_to_string(Path::new(config::CONFIG_PATH).join(&self.config.git.priv_key))
+                .expect("Can't read priv_key");
+
+        Ok(git2::Cred::ssh_key_from_memory(
+            b.unwrap(),
+            None,
+            &key,
+            None,
+        )?)
+    }
+
+    /// Commit changes froum AUR and push them back
+    /// to the server
+    fn apply_custom_repo_changes(
+        &self,
+        custom_repo: &git2::Repository,
+        aur_package: &aur_client_fork::aur::Package,
+    ) -> Result<(), Box<dyn stdErr>> {
         let mut custom_repo_index = custom_repo.index()?;
 
         // Add all to git index
@@ -217,7 +234,7 @@ impl BuildService {
         custom_repo_index.write()?;
 
         // Create commit
-        let sig = git2::Signature::now(&config.git.bot_name, &config.git.bot_email)?;
+        let sig = git2::Signature::now(&self.config.git.bot_name, &self.config.git.bot_email)?;
         let commit = custom_repo.find_commit(custom_repo.head()?.target().unwrap())?;
         let tree = custom_repo.find_tree(custom_repo_index.write_tree()?)?;
 
@@ -240,7 +257,7 @@ impl BuildService {
 
         // Push changes
         let mut cb = git2::RemoteCallbacks::new();
-        cb.credentials(credential_callback);
+        cb.credentials(|a, b, c| self.get_ssh_auth(a, b, c));
 
         let mut push_option = git2::PushOptions::new();
         push_option.remote_callbacks(cb);
@@ -249,9 +266,6 @@ impl BuildService {
             &["refs/heads/master:refs/heads/master"],
             Some(&mut push_option),
         )?;
-
-        println!("push done");
-
         Ok(())
     }
 }

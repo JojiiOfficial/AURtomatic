@@ -14,7 +14,7 @@ tokio = { version = "0.2.22", features = ["rt-core", "rt-threaded", "macros", "p
 serde = "1.0.115"
 serde_yaml = "0.8.13"
 lib_remotebuild-rs = "0.1.5"
-git2 = "0.13.10"
+git2 = "0.13.11"
 reqwest = "0.10.8"
 walkdir = "2.3.1"
 diff = "0.1.12"

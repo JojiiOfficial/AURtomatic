@@ -8,6 +8,6 @@ steps:
   commands:
   - apk update
   - apk upgrade
-  - apk add pacman pacman-dev gcc musl
+  - apk add pacman pacman-dev gcc musl libc-dev
   - cargo build --all
   - cargo test --all

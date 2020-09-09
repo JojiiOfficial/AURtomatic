@@ -3,11 +3,16 @@ type: docker
 name: default
 
 steps:
-- name: test
+- name: Build
   image: rust:1.46.0-alpine
   commands:
-  - apk update
-  - apk upgrade
-  - apk add pacman pacman-dev gcc musl libc-dev
+  - apk update && apk upgrade
+  - apk add pacman pacman-dev gcc libc-dev
   - cargo build --all
+
+- name: Test
+  image: rust:1.46.0-alpine
+  commands:
+  - apk update && apk upgrade
+  - apk add pacman pacman-dev gcc libc-dev
   - cargo test --all

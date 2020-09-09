@@ -4,7 +4,10 @@ name: default
 
 steps:
 - name: test
-  image: rust:1.46.0-buster
+  image: rust:1.46.0-alpine
   commands:
+  - apk update
+  - apk upgrade
+  - apk add pacman pacman-dev
   - cargo build --all
   - cargo test --all

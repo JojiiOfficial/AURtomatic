@@ -39,7 +39,7 @@ fn check_parse_src_2() {
 }
 
 #[test]
-fn check_checking_diff_1() {
+fn check_diff_1() {
     let old = fs::read_to_string("./tests/pkgbuild_old").unwrap();
     let new = fs::read_to_string("./tests/pkgbuild_new").unwrap();
 
@@ -54,4 +54,40 @@ fn check_checking_diff_1() {
 
     assert!(!is_diff_empty(&diff));
     assert!(Check::check_diff(diff))
+}
+
+#[test]
+fn hash_file_diff_1() {
+    let a = Path::new("./tests/pkgbuild_new");
+    let output = hash_file_diff(&a, &a);
+
+    assert!(output.is_ok());
+    assert!(output.unwrap());
+}
+
+#[test]
+fn hash_file_diff_2() {
+    let a = Path::new("./tests/pkgbuild_new");
+    let b = Path::new("./tests/pkgbuild_old");
+    let output = hash_file_diff(&a, &b);
+
+    assert!(output.is_ok());
+    assert!(!output.unwrap());
+}
+
+#[test]
+fn test_get_mime() {
+    let mime = get_mime(Path::new("./tests/pkgbuild_new"));
+
+    assert!(mime.is_ok());
+    assert_eq!(mime.unwrap(), "text/plain");
+}
+
+#[test]
+fn check_partial_contains() {
+    assert!(partial_contains(ALLOWED_MIMES, "image/jpg"));
+    assert!(!partial_contains(ALLOWED_MIMES, "application/xml"));
+
+    assert!(partial_contains(UTF8_MIMES, "application/xml"));
+    assert!(partial_contains(UTF8_MIMES, "application/x-desktop"));
 }

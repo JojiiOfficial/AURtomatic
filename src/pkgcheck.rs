@@ -1,13 +1,16 @@
 #![allow(dead_code)]
 
 use std::error::Error;
-use std::fs;
-use std::io;
+use std::fs::{self, File};
+use std::io::{self, prelude::*};
 use std::path::Path;
+
+use md5;
+use regex::Regex;
 use tokio::process::Command;
+use tree_magic;
 
 use crate::dir_diff;
-use regex::Regex;
 
 #[cfg(test)]
 #[path = "pkgcheck_test.rs"]
@@ -37,6 +40,22 @@ const ALLOWED_CHANGES: &'static [&'static str] = &[
     "optdepends",
     "validpgpkeys",
     "conflicts",
+    "sha256sums_armv7h",
+    "sha256sums_aarch64",
+    "sha256sums_x86_64",
+];
+
+/// All MIMES which are allowed to be changed in updates.
+const ALLOWED_MIMES: &'static [&'static str] = &["image/"];
+
+/// All MIMES which will be go through diff checks
+const UTF8_MIMES: &'static [&'static str] = &[
+    "text/",
+    "application/x-shellscript",
+    "application/x-desktop",
+    "application/mbox",
+    "application/xml",
+    "application/json",
 ];
 
 impl<'a> Check<'a> {
@@ -73,18 +92,35 @@ impl<'a> Check<'a> {
                 continue;
             };
 
-            let a_content = parse_src_file(fs::read_to_string(a.path())?);
-            let b_content = parse_src_file(fs::read_to_string(b.path())?);
+            let mime = get_mime(b.path())?;
+            if partial_contains(UTF8_MIMES, mime) {
+                println!("utf8-mime: {}", mime);
+                let a_content = parse_src_file(fs::read_to_string(a.path())?);
+                let b_content = parse_src_file(fs::read_to_string(b.path())?);
 
-            //  Build diff from both file contents
-            let diff = diff::lines(a_content.as_str(), b_content.as_str());
-            if !is_diff_empty(&diff) {
-                had_diff = true;
-            }
+                //  Build diff from both file contents
+                let diff = diff::lines(a_content.as_str(), b_content.as_str());
+                if !is_diff_empty(&diff) {
+                    had_diff = true;
+                }
 
-            // Check and validate the upgraded package
-            if !Self::check_diff(diff) {
-                return Ok(false);
+                // Check and validate the upgraded package
+                if !Self::check_diff(diff) {
+                    return Ok(false);
+                }
+            } else {
+                println!("Non utf8-mime: {}", mime);
+                let has_diff = hash_file_diff(&a.path(), &b.path())?;
+
+                if !partial_contains(ALLOWED_MIMES, mime) && has_diff {
+                    // Throw error if mime doesn't allow changing
+                    println!("Hashsum check failed: {}", b.path().display());
+                    return Ok(false);
+                }
+
+                if has_diff {
+                    had_diff = true;
+                }
             }
         }
 
@@ -135,6 +171,7 @@ impl<'a> Check<'a> {
         Ok(())
     }
 
+    // TODO use custom user
     pub async fn update_custom_srcinfo(&self) -> Result<(), Box<dyn Error>> {
         let status = Command::new("sh")
             .arg("-c")
@@ -195,4 +232,38 @@ fn unwrap_multi_line(a: &str, sub: &str) -> String {
         .unwrap()
         .replace_all(String::from(a).trim().replace(sub, "' ").as_str(), " ")
         .to_string()
+}
+
+fn partial_contains<'b, R>(v: R, has: &str) -> bool
+where
+    R: IntoIterator<Item = &'b &'b str>,
+{
+    for i in v.into_iter() {
+        if *i == has || has.starts_with(i) {
+            return true;
+        }
+    }
+    false
+}
+
+fn get_mime<'b>(path: &'b Path) -> Result<&'b str, io::Error> {
+    let mut buffer = Vec::new();
+    get_file_contents(&mut buffer, path)?;
+    Ok(tree_magic::from_u8(&buffer))
+}
+
+fn hash_file_diff(a: &Path, b: &Path) -> Result<bool, io::Error> {
+    Ok(get_file_md5(a)? == get_file_md5(b)?)
+}
+
+fn get_file_md5(path: &Path) -> Result<String, io::Error> {
+    let mut buffer: Vec<u8> = Vec::new();
+    get_file_contents(&mut buffer, path)?;
+    Ok(format!("{:x}", md5::compute(buffer)))
+}
+
+fn get_file_contents(buffer: &mut Vec<u8>, path: &Path) -> Result<(), io::Error> {
+    let mut f = File::open(path)?;
+    f.read_to_end(buffer)?;
+    Ok(())
 }

@@ -2,6 +2,7 @@ use std::error::Error as stdErr;
 use std::fmt::{Display, Formatter, Result};
 
 #[derive(Debug)]
+#[allow(dead_code)]
 pub enum Error {
     DifferentDirs(String),
     ChecksFailed(String),

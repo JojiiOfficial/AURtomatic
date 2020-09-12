@@ -179,7 +179,8 @@ impl BuildService {
 
         // check file contents
         if !pkg_check.check_files()? {
-            return Err(Box::new(Error::ChecksFailed(local_pkg_info.pkg_name)));
+            //return Err(Box::new(Error::ChecksFailed(local_pkg_info.pkg_name)));
+            return Ok(());
         }
 
         pkg_check.apply_changes()?;
@@ -229,6 +230,9 @@ impl BuildService {
         // Sign package
 
         // Publish package
+
+        // Delete tmp folder
+        fs::remove_dir_all(tmp_path)?;
 
         Ok(())
     }
@@ -302,7 +306,7 @@ impl BuildService {
         Ok(())
     }
 
-    async fn wait_for_build_job<'a>(&self, rbuild: &LibRb, jid: &u32) -> Result<(), Error> {
+    async fn wait_for_build_job(&self, rbuild: &LibRb, jid: &u32) -> Result<(), Error> {
         let info = loop {
             let info = rbuild.job_info(*jid).await;
 

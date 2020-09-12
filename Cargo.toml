@@ -22,8 +22,11 @@ futures = "0.3.5"
 openssl-sys = "0.9.58"
 regex = "1.3.9"
 async-std = "1.6.3"
+tree_magic = {version ="0.2.3", features = ["staticmime"]}
+md5 = "0.7.0"
 
 [features]
 vendored = ["openssl-sys/vendored"]
 
-
+[profile.release]
+lto = true

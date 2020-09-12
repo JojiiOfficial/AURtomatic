@@ -171,14 +171,17 @@ impl<'a> Check<'a> {
         Ok(())
     }
 
-    // TODO use custom user
-    pub async fn update_custom_srcinfo(&self) -> Result<(), Box<dyn Error>> {
+    pub async fn update_custom_srcinfo<S: AsRef<str>>(
+        &self,
+        user: S,
+    ) -> Result<(), Box<dyn Error>> {
         let status = Command::new("sh")
             .arg("-c")
             .arg(format!(
                 "pushd \"{}\" > /dev/null; makepkg --printsrcinfo > .SRCINFO",
                 self.folder_left.to_str().unwrap()
             ))
+            .arg(user.as_ref())
             .status()
             .await?;
 

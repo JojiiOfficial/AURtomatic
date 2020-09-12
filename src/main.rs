@@ -184,7 +184,9 @@ impl BuildService {
         }
 
         pkg_check.apply_changes()?;
-        pkg_check.update_custom_srcinfo().await?;
+        pkg_check
+            .update_custom_srcinfo(config.makepkg_user.as_str())
+            .await?;
 
         // Create remote build job.
         let rbuild = config.as_rbuild();

@@ -24,6 +24,7 @@ pub struct Config {
     pub ignore_packages: Option<Vec<String>>,
     pub refresh_delay: Duration,
     pub telegram: Telegram,
+    pub makepkg_user: String,
 }
 
 #[derive(Default, Debug, Serialize, Deserialize)]
@@ -102,6 +103,7 @@ impl Config {
             || self.git.is_empty()
             || self.telegram.bot_token.is_empty()
             || self.telegram.user_id == 0
+            || self.makepkg_user.is_empty()
     }
 
     /// Create all files needed for a working environment.

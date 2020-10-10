@@ -24,12 +24,14 @@ pub struct Config {
     pub ignore_packages: Option<Vec<String>>,
     pub refresh_delay: Duration,
     pub telegram: Telegram,
+    pub disable_pkgcheck: bool,
 }
 
 #[derive(Default, Debug, Serialize, Deserialize)]
 pub struct Telegram {
     pub bot_token: String,
     pub user_id: u64,
+    pub startup_message: bool,
 }
 
 /// Git upstream for custom repository.

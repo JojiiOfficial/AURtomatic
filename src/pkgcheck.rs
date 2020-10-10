@@ -43,6 +43,8 @@ const ALLOWED_CHANGES: &'static [&'static str] = &[
     "sha256sums_armv7h",
     "sha256sums_aarch64",
     "sha256sums_x86_64",
+    "depends",
+    "_pkgname",
 ];
 
 /// All MIMES which are allowed to be changed in updates.
@@ -105,7 +107,7 @@ impl<'a> Check<'a> {
                 }
 
                 // Check and validate the upgraded package
-                if !Self::check_diff(diff) {
+                if !Self::check_diff(diff, a.file_name().to_str().unwrap()) {
                     return Ok(false);
                 }
             } else {
@@ -133,7 +135,7 @@ impl<'a> Check<'a> {
     }
 
     /// Returns false if the AUR file contains illegal changes
-    fn check_diff(res: Vec<diff::Result<&str>>) -> bool {
+    fn check_diff(res: Vec<diff::Result<&str>>, file: &str) -> bool {
         // Go through every created diff
         for diff in res {
             if let diff::Result::Right(r) = diff {
@@ -146,7 +148,7 @@ impl<'a> Check<'a> {
                 let s = r.split("=").nth(0).unwrap();
                 // Check if the variable update is allowed. Custom variables are allowed
                 if !ALLOWED_CHANGES.contains(&s) && !s.starts_with("_") {
-                    eprintln!("Found '{}' -> Illegal change", s);
+                    eprintln!("Found '{}' -> Illegal change in {}", s, file);
                     return false;
                 }
             }

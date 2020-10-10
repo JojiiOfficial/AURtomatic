@@ -39,10 +39,12 @@ impl BuildService {
     }
 
     async fn run(&self) {
-        self.tgbot
-            .send_message(self.config.telegram.user_id, "Bot started")
-            .await
-            .unwrap();
+        if self.config.telegram.startup_message {
+            self.tgbot
+                .send_message(self.config.telegram.user_id, "Bot started")
+                .await
+                .unwrap();
+        }
 
         loop {
             self.refresh_packages(&self.config).await;
@@ -178,9 +180,8 @@ impl BuildService {
         }
 
         // check file contents
-        if !pkg_check.check_files()? {
-            //return Err(Box::new(Error::ChecksFailed(local_pkg_info.pkg_name)));
-            return Ok(());
+        if !config.disable_pkgcheck && !pkg_check.check_files()? {
+            return Err(Box::new(Error::ChecksFailed(local_pkg_info.pkg_name)));
         }
 
         pkg_check.apply_changes()?;
@@ -356,6 +357,10 @@ async fn main() {
     if let Err(e) = config.create_environment() {
         eprintln!("Error creating dirs: {}", e);
         exit(1);
+    }
+
+    if config.disable_pkgcheck {
+        println!("Warn!: pkgcheck disabled!");
     }
 
     let tg_bot = tg_bot_wrapper::TgBot::new(config.telegram.bot_token.clone());

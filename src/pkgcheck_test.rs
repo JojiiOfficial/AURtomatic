@@ -53,7 +53,7 @@ fn check_diff_1() {
     let diff = diff::lines(a_content.as_str(), b_content.as_str());
 
     assert!(!is_diff_empty(&diff));
-    assert!(Check::check_diff(diff))
+    assert!(Check::check_diff(diff, "pkgbuild_new"))
 }
 
 #[test]

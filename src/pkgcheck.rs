@@ -79,7 +79,7 @@ impl<'a> Check<'a> {
 
     /// Check all files by comparing the differences of the git version and the
     /// new AUR package version.
-    pub fn check_files(&self) -> Result<bool, Box<dyn Error>> {
+    pub fn check_files(&self, check_diff: bool) -> Result<bool, Box<dyn Error>> {
         let mut had_diff = false;
 
         // Zip up all git files and the corresponding updated files
@@ -107,14 +107,14 @@ impl<'a> Check<'a> {
                 }
 
                 // Check and validate the upgraded package
-                if !Self::check_diff(diff, a.file_name().to_str().unwrap()) {
+                if check_diff && !Self::check_diff(diff, a.file_name().to_str().unwrap()) {
                     return Ok(false);
                 }
             } else {
                 println!("Non utf8-mime: {}", mime);
                 let has_diff = hash_file_diff(&a.path(), &b.path())?;
 
-                if !partial_contains(ALLOWED_MIMES, mime) && has_diff {
+                if check_diff && !partial_contains(ALLOWED_MIMES, mime) && has_diff {
                     // Throw error if mime doesn't allow changing
                     println!("Hashsum check failed: {}", b.path().display());
                     return Ok(false);

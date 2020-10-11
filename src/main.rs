@@ -180,7 +180,7 @@ impl BuildService {
         }
 
         // check file contents
-        if !config.disable_pkgcheck && !pkg_check.check_files()? {
+        if !pkg_check.check_files(!config.disable_pkgcheck)? {
             return Err(Box::new(Error::ChecksFailed(local_pkg_info.pkg_name)));
         }
 
